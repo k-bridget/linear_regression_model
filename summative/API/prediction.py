@@ -1,13 +1,3 @@
-"""
-FastAPI service for the IPV-attitude linear regression model.
-
-Endpoints:
-    GET  /            -> health check, redirects to Swagger docs
-    POST /predict      -> single prediction from the saved best model
-    POST /retrain       -> retrain the model from the original data + optional new data,
-                            overwriting the deployed model with the newly retrained one
-"""
-
 import io
 import os
 from typing import Literal, Optional
@@ -27,8 +17,6 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "best_model.pkl")
-# Original training data is bundled alongside the API so /retrain always has a base dataset
-# to combine with newly uploaded data.
 TRAINING_DATA_PATH = os.path.join(BASE_DIR, "violence_data.csv")
 
 CATEGORICAL_FEATURES = [
@@ -45,29 +33,15 @@ app = FastAPI(
     description=(
         "Predicts the percentage of a demographic group in a country who believe "
         "intimate partner violence is justified, given demographic and country context. "
-        "Built to support targeting of SRH rights advocacy and education for women and girls."
+        "Built to support SRH rights advocacy and education for women and girls."
     ),
     version="1.0.0",
 )
-
-# CORS configuration -- reasoning:
-# - allow_origins is an explicit allow-list (NOT "*"), because this API accepts POST requests
-#   with structured survey/demographic data and is meant to be called only by our own Flutter
-#   app and local development tools -- not by arbitrary third-party websites. Using "*" would let
-#   any website's JavaScript silently call this API from a visitor's browser.
-# - Flutter mobile builds (Android/iOS native) do not send a browser "Origin" header at all, so
-#   CORS does not restrict them; the allow-list below exists for the Flutter *web* build and for
-#   Swagger UI / local testing in a browser.
-# - allow_methods is restricted to GET and POST since this API never needs PUT/PATCH/DELETE.
-# - allow_headers includes Content-Type (needed for JSON bodies) and Authorization (reserved for
-#   future auth on /retrain).
-# - allow_credentials is False because this API does not use cookies or session-based auth --
-#   every request is stateless, so there is no credential to carry cross-origin.
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",       # local web dev
-    "http://localhost:8080",       # flutter web dev server
+    "http://localhost:3000",       
+    "http://localhost:8080",       
     "http://127.0.0.1:8080",
-    "https://your-flutter-web-app.example.com",  # replace with your deployed Flutter web origin, if any
+    "https://your-flutter-web-app.example.com",  
 ]
 
 app.add_middleware(
@@ -79,9 +53,7 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# Request / response schemas (Pydantic -- enforced data types + range constraints)
-# ---------------------------------------------------------------------------
+# Request / response schemas 
 class PredictionRequest(BaseModel):
     country: Literal[
         "Afghanistan", "Albania", "Angola", "Armenia", "Azerbaijan", "Bangladesh", "Benin",
@@ -148,10 +120,7 @@ class RetrainResponse(BaseModel):
     test_rmse: float
     test_r2: float
 
-
-# ---------------------------------------------------------------------------
 # Routes
-# ---------------------------------------------------------------------------
 @app.get("/", include_in_schema=False)
 def root():
     """Redirect the bare root URL to the interactive Swagger UI docs."""
@@ -185,16 +154,6 @@ def predict(request: PredictionRequest):
 
 @app.post("/retrain", response_model=RetrainResponse)
 def retrain(file: Optional[UploadFile] = File(None)):
-    """
-    Retrain the model.
-
-    - If a CSV file is uploaded (same schema as violence_data.csv: RecordID, Country, Gender,
-      Demographics Question, Demographics Response, Question, Survey Year, Value), it is combined
-      with the original training data before retraining.
-    - If no file is uploaded, the model is simply retrained on the original bundled dataset
-      (useful to refresh the model file, e.g. after a code/hyperparameter change).
-    - The newly trained pipeline overwrites best_model.pkl, so /predict immediately starts using it.
-    """
     if not os.path.exists(TRAINING_DATA_PATH):
         raise HTTPException(status_code=503, detail="Base training dataset not found on server.")
 
