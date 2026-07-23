@@ -25,9 +25,8 @@ CATEGORICAL_FEATURES = [
 NUMERIC_FEATURES = ["Survey Year"]
 TARGET = "Value"
 
-# ---------------------------------------------------------------------------
-# App & CORS
-# ---------------------------------------------------------------------------
+# App 
+
 app = FastAPI(
     title="IPV Attitude Prediction API",
     description=(
